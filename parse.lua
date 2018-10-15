@@ -15,7 +15,7 @@
 -- ----------------------------------------------------------------------------
 -- Lexer                                                                     --
 -- ----------------------------------------------------------------------------
---- Dbus type signature tokens
+--- DBus type signature tokens
 local TOKENS = {
   BYTE        = 1,
   BOOLEAN     = 2,
@@ -38,7 +38,7 @@ local TOKENS = {
   C_DICT      = 19,
 }
 
---- Dictionary of dbus type identifier to token
+--- Dictionary of DBus type identifier to token
 local PATTERN_TO_TOKEN = {
   ['y'] = TOKENS.BYTE,
   ['b'] = TOKENS.BOOLEAN,
@@ -61,7 +61,7 @@ local PATTERN_TO_TOKEN = {
   ['}'] = TOKENS.C_DICT,
 }
 
---- Tokenize a dbus type signature.
+--- Tokenize a DBus type signature.
 --- @tparam string signature input dbus type signature
 --- @treturn table an array of token
 local function tokenize(signature)
@@ -198,7 +198,7 @@ local function tokensToParseTree(tokens)
     [TOKENS.C_DICT]       = function() closeContainer(NODES.DICT) end,
   }
 
-  for i, token in ipairs(tokens) do
+  for _, token in ipairs(tokens) do
     switch[token]()
   end
   return _root
@@ -214,15 +214,15 @@ end
 local function visitTree(root, visitor)
   -- try to visit a visitor method
   local function tryVisit(method, node)
-    if visitor[method] ~= nil and type(visitor[method]) == 'function' then
+    if type(visitor[method]) == 'function' then
       visitor[method](node)
     else
-      print('not found: ', method)
+      print('visitTree: mehod not found: ', method)
     end
   end
 
   if root.node == nil then  -- not a node
-    for i, child in ipairs(root) do
+    for _, child in ipairs(root) do
       visitTree(child, visitor)
     end
   else
@@ -239,7 +239,7 @@ local function visitTree(root, visitor)
       tryVisit('leaveDict', root)
     elseif root.node == NODES.STRUCT then
       tryVisit('enterStruct', root)
-      for k, type in ipairs(root.types) do
+      for _, type in ipairs(root.types) do
         visitTree(type, visitor)
       end
       tryVisit('leaveStruct', root)
@@ -254,7 +254,8 @@ end
 -- ----------------------------------------------------------------------------
 -- Pretty Print                                                              --
 -- ----------------------------------------------------------------------------
-local function prettyPrint(tree)
+local prettyPrint
+do
   local NODES_TO_STR = {
     [NODES.BASIC]   = 'basic',
     [NODES.VARIANT] = 'variant',
@@ -277,60 +278,63 @@ local function prettyPrint(tree)
     [BASIC_TYPES.OBJECT_PATH] = 'path',
     [BASIC_TYPES.SIGNATURE]   = 'signature',
   }
-  local _level = 0
-  local function _p(str)
-    print(('  '):rep(_level) .. str)
+   
+  prettyPrint = function(tree)
+    local _level = 0
+    local function _p(str)
+      print(('  '):rep(_level) .. str)
+    end
+    local _visitor = {
+      enterBasic    = function(node)
+      end,
+
+      leaveBasic    = function(node)
+        _p(('[%s] %s'):format(NODES_TO_STR[node.node], BASIC_TYPES_TO_STR[node.type]))
+      end,
+
+      enterVariant  = function(node)
+        _p(('[%s]'):format(NODES_TO_STR[node.node]))
+      end,
+
+      leaveVariant  = function(node)
+      end,
+
+      enterDict     = function(node)
+        _p(('[%s]'):format(NODES_TO_STR[node.node]))
+        _level = _level + 1
+      end,
+
+      leaveDict     = function(node)
+        _level = _level - 1
+      end,
+
+      enterStruct   = function(node)
+        _p(('[%s]'):format(NODES_TO_STR[node.node]))
+        _level = _level + 1
+      end,
+
+      leaveStruct   = function(node)
+        _level = _level - 1
+      end,
+
+      enterArray    = function(node)
+        _p(('[%s]'):format(NODES_TO_STR[node.node]))
+        _level = _level + 1
+      end,
+
+      leaveArray    = function(node)
+        _level = _level - 1
+      end,
+    }
+    visitTree(tree, _visitor)
   end
-  local _visitor = {
-    enterBasic    = function(node)
-    end,
-
-    leaveBasic    = function(node)
-      _p(('[%s] %s'):format(NODES_TO_STR[node.node], BASIC_TYPES_TO_STR[node.type]))
-    end,
-
-    enterVariant  = function(node)
-      _p(('[%s]'):format(NODES_TO_STR[node.node]))
-    end,
-
-    leaveVariant  = function(node)
-    end,
-
-    enterDict     = function(node)
-      _p(('[%s]'):format(NODES_TO_STR[node.node]))
-      _level = _level + 1
-    end,
-
-    leaveDict     = function(node)
-      _level = _level - 1
-    end,
-
-    enterStruct   = function(node)
-      _p(('[%s]'):format(NODES_TO_STR[node.node]))
-      _level = _level + 1
-    end,
-
-    leaveStruct   = function(node)
-      _level = _level - 1
-    end,
-
-    enterArray    = function(node)
-      _p(('[%s]'):format(NODES_TO_STR[node.node]))
-      _level = _level + 1
-    end,
-
-    leaveArray    = function(node)
-      _level = _level - 1
-    end,
-  }
-  visitTree(tree, _visitor)
 end
 
 
 return {
-  NODES = NODES,
-  BASIC_TYPES = BASIC_TYPES,
+  NODES          = NODES,
+  BASIC_TYPES    = BASIC_TYPES,
   parseSignature = parseSignature,
-  visitTree = visitTree,
-  prettyPrint = prettyPrint
+  visitTree      = visitTree,
+  prettyPrint    = prettyPrint
 }
